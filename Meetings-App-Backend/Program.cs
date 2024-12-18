@@ -1,5 +1,7 @@
 
 using Meetings_App_Backend.Data;
+using Meetings_App_Backend.AutoMapper;
+
 using Meetings_App_Backend.Models;
 using Meetings_App_Backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -22,48 +24,18 @@ namespace Meetings_App_Backend
 
             builder.Services.AddControllers();
 
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-            builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
-
-            builder.Services.AddIdentity<User, IdentityRole>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddDefaultTokenProviders();
-
-            builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
-
-            builder.Services.AddScoped<IUserService,UserService>();
-
-            builder.Services.AddAuthentication("Bearer")
-                .AddJwtBearer(options =>
-                {
-                    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-                System.Text.Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"])
-            ),
-                        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                        ValidAudience = builder.Configuration["Jwt:Audience"]
-
-                    };
-
-                });
+            builder.Services.AddEndpointsApiExplorer();
 
 
             builder.Services.AddSwaggerGen(options =>
             {
-                // Add JWT Bearer authentication support to Swagger UI
-                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                options.SwaggerDoc("v1", new OpenApiInfo { Title = "Meetings-App-Backend", Version = "v1" });
+                options.AddSecurityDefinition(JwtBearerDefaults.AuthenticationScheme, new OpenApiSecurityScheme
                 {
                     Name = "Authorization",
-                    Type = SecuritySchemeType.Http,
-                    Scheme = "bearer",
-                    BearerFormat = "JWT",
                     In = ParameterLocation.Header,
-                    Description = "Please enter the token with the 'Bearer' prefix"
+                    Type = SecuritySchemeType.ApiKey,
+                    Scheme = JwtBearerDefaults.AuthenticationScheme
                 });
 
                 options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -74,17 +46,74 @@ namespace Meetings_App_Backend
                 Reference = new OpenApiReference
                 {
                     Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
+                    Id = JwtBearerDefaults.AuthenticationScheme
+                },
+                Scheme = "Oauth2",
+                Name = JwtBearerDefaults.AuthenticationScheme,
+                In = ParameterLocation.Header
             },
-            new string[] {}
+            new List<string>()
         }
     });
             });
 
 
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+            builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite("Data Source = meetingsapp.db"));
+
+            builder.Services.AddAutoMapper(typeof(AutoMapperProfiles));
+
+
+
+
+            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+           .AddJwtBearer(options =>
+           {
+               options.TokenValidationParameters = new TokenValidationParameters
+               {
+                   AuthenticationType = "Jwt",
+                   ValidateIssuer = true,
+                   ValidateAudience = true,
+                   ValidateLifetime = true,
+                   ValidateIssuerSigningKey = true,
+                   IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
+           System.Text.Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])
+       ),
+                   ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                   ValidAudience = builder.Configuration["Jwt:Audience"]
+
+               };
+
+           });
+
+            builder.Services.AddIdentityCore<User>()
+                .AddRoles<IdentityRole>()
+                .AddTokenProvider<DataProtectorTokenProvider<User>>("MeetingsAppServer")
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddDefaultTokenProviders();
+
+
+            builder.Services.Configure<IdentityOptions>(options =>
+            {
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireNonAlphanumeric = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequiredLength = 6;
+                options.Password.RequiredUniqueChars = 1;
+            });
+
+            builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+
+            builder.Services.AddScoped<IUserService,UserService>();
+
+           
+
+
+           
+
+
+            
+           
 
             var app = builder.Build();
 
@@ -94,6 +123,8 @@ namespace Meetings_App_Backend
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
+
+            app.UseHttpsRedirection();
 
             app.UseAuthentication();
             app.UseAuthorization();

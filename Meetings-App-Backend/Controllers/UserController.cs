@@ -18,7 +18,7 @@ namespace Meetings_App_Backend.Controllers
         }
 
         // GET /api/users
-        [Authorize]
+        [Authorize(Roles = "Reader,Writer")]
         [HttpGet("users")]
         public async Task<IActionResult> GetUsers()
         {

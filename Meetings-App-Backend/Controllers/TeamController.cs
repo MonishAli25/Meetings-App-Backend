@@ -33,7 +33,7 @@ namespace Meetings_App_Backend.Controllers
         // PATCH /api/teams/{id}
         [Authorize]
         [HttpPatch("teams/{id}")]
-        public async Task<IActionResult> UpdateTeam(int id, [FromQuery] string action, [FromQuery] int userId)
+        public async Task<IActionResult> UpdateTeam(int id, [FromQuery] string action, [FromQuery] string userId)
         {
             if (action == "add_member")
             {

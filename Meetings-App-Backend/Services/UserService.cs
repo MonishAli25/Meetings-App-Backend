@@ -1,5 +1,6 @@
 ﻿using Meetings_App_Backend.Data;
 using Meetings_App_Backend.Models;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -14,24 +15,27 @@ namespace Meetings_App_Backend.Services
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IPasswordHasher<User> _passwordHasher;
+        private readonly UserManager<User> userManager;
 
-        public UserService(ApplicationDbContext context, IConfiguration configuration, IPasswordHasher<User> passwordHasher)
+        public UserService(ApplicationDbContext context, IConfiguration configuration, IPasswordHasher<User> passwordHasher, UserManager<User> userManager)
         {
             _context = context;
             _configuration = configuration;
             _passwordHasher = passwordHasher;
+            this.userManager = userManager;
         }
 
         public async Task<List<UserResponse>> GetUsersAsync()
         {
             return await _context.Users
-                .Select(u => new UserResponse { Id = u.Id, Name = u.Name, Email = u.Email })
+                .Select(u => new UserResponse { Id = u.Id, UserName = u.UserName, Email = u.Email })
                 .ToListAsync();
         }
 
 
         public async Task<User> RegisterAsync(RegisterRequest model)
         {
+            string[] roles = new string[] { "Reader", "Writer" }; 
 
             var userExists = await _context.Users.AnyAsync(u => u.Email == model.Email);
             if (userExists)
@@ -39,14 +43,31 @@ namespace Meetings_App_Backend.Services
 
             var user = new User
             {
-                Name = model.Name,
+                UserName = model.Name,
                 Email = model.Email,
-                PasswordHash = _passwordHasher.HashPassword(null, model.Password)
             };
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-            return user;
+            var identityResult = await userManager.CreateAsync(user,model.Password);
+
+            if (identityResult.Succeeded)
+            {
+                identityResult = await userManager.AddToRolesAsync(user, roles);
+            }
+
+
+
+            if (identityResult.Succeeded)
+            {
+
+
+                return user;
+            }
+            else
+            {
+                throw new Exception("not registered");
+            }
+
+           
         }
 
         public async Task<User> AuthenticateAsync(LoginRequest model)
@@ -76,9 +97,15 @@ namespace Meetings_App_Backend.Services
 
             var claims = new[]
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email)
-            };
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim(ClaimTypes.Role, "Reader"),
+                new Claim(ClaimTypes.Role, "Writer"),
+        };
+
+            
+
+
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -94,7 +121,7 @@ namespace Meetings_App_Backend.Services
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        public int GetUserIdFromClaims(ClaimsPrincipal user) => int.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier));
+        public string GetUserIdFromClaims(ClaimsPrincipal user) => (user.FindFirstValue(ClaimTypes.NameIdentifier));
 
 
 
@@ -113,7 +140,7 @@ namespace Meetings_App_Backend.Services
             return team;
         }
 
-        public async Task<Team> AddMemberToTeamAsync(int teamId, int userId)
+        public async Task<Team> AddMemberToTeamAsync(int teamId, string userId)
         {
             var team = await _context.Teams.Include(t => t.Members).FirstOrDefaultAsync(t => t.Id == teamId);
             if (team != null)
@@ -124,7 +151,7 @@ namespace Meetings_App_Backend.Services
             return team;
         }
 
-        public async Task<Team> RemoveMemberFromTeamAsync(int teamId, int userId)
+        public async Task<Team> RemoveMemberFromTeamAsync(int teamId, string userId)
         {
             var team = await _context.Teams.Include(t => t.Members).FirstOrDefaultAsync(t => t.Id == teamId);
             if (team != null)

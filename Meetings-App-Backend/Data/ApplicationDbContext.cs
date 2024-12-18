@@ -1,8 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Meetings_App_Backend.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 namespace Meetings_App_Backend.Data
 {
-    public class ApplicationDbContext : DbContext
+    public class ApplicationDbContext : IdentityDbContext<User>
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
@@ -28,7 +30,7 @@ namespace Meetings_App_Backend.Data
 
             modelBuilder.Entity<MeetingAttendee>()
                 .HasOne(ma => ma.Meeting)
-                .WithMany(m => m.Attendees)
+                .WithMany(m => m.MeetingAttendees)
                 .HasForeignKey(ma => ma.MeetingId);
 
             // Configure composite key for TeamMember
@@ -45,6 +47,29 @@ namespace Meetings_App_Backend.Data
                 .HasOne(tm => tm.Team)
                 .WithMany(t => t.Members)
                 .HasForeignKey(tm => tm.TeamId);
+
+            var readerRoleId = "a71a55d6-99d7-4123-b4e0-1218ecb90e3e";
+            var writerRoleId = "c309fa92-2123-47be-b397-a1c77adb502c";
+
+            var roles = new List<IdentityRole>
+        {
+            new IdentityRole
+            {
+                Id = readerRoleId,
+                ConcurrencyStamp = readerRoleId,
+                Name = "Reader",
+                NormalizedName = "Reader".ToUpper()
+            },
+            new IdentityRole
+            {
+                Id = writerRoleId,
+                ConcurrencyStamp = writerRoleId,
+                Name = "Writer",
+                NormalizedName = "Writer".ToUpper()
+            }
+        };
+
+            modelBuilder.Entity<IdentityRole>().HasData(roles);
         }
 
     }
